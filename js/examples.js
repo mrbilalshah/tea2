@@ -1,5 +1,5 @@
 'use strict';
-/* ContrapTea — loadable example machines.
+/* ContrapTea, loadable example machines.
    These are just ordinary saved states: everything here can be built by hand. */
 
 function _exPart(id, type, x, y, rot, props) {

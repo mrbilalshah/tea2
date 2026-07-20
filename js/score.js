@@ -1,5 +1,5 @@
 'use strict';
-/* ContrapTea — cup scoring, badges and tips */
+/* ContrapTea, cup scoring, badges and tips */
 
 const IDEAL = {
   tempLo: 70, tempHi: 90,
@@ -56,12 +56,12 @@ function makeTips(a) {
     tips.push('☕ The cup is basically empty! Get water flowing: tap → kettle → pump with a hose aimed over the cup.');
     return tips;
   }
-  if (a.volScore < 80) tips.push(`💧 Only ${Math.round(a.vol)} ml made it to the cup — pump for longer (widen the timer window) or lose less water on the way.`);
-  if (a.temp < IDEAL.tempLo) tips.push(`🥶 Served at ${Math.round(a.temp)}°C — lukewarm! More heater watts or voltage, a hotter thermostat setpoint, or serve sooner after pouring (heat is lost every second).`);
+  if (a.volScore < 80) tips.push(`💧 Only ${Math.round(a.vol)} ml made it to the cup; pump for longer (widen the timer window) or lose less water on the way.`);
+  if (a.temp < IDEAL.tempLo) tips.push(`🥶 Served at ${Math.round(a.temp)}°C, lukewarm! More heater watts or voltage, a hotter thermostat setpoint, or serve sooner after pouring (heat is lost every second).`);
   if (a.temp > IDEAL.tempHi) tips.push(`🔥 ${Math.round(a.temp)}°C is scalding! Lower the thermostat setpoint or let it stand a moment before serving.`);
   if (a.str < IDEAL.strLo) tips.push(`😴 ${Math.round(a.str)}% strength is weak. Grind the leaves (ground tea extracts ~4× faster), steep hotter or longer, or add more leaves.`);
-  if (a.str > IDEAL.strHi) tips.push(`🥴 ${Math.round(a.str)}% strength — stewed! Fewer leaves, a shorter steep, or more water to dilute.`);
-  if (a.bits > 0) tips.push(`🍃 ${a.bits} bit${a.bits > 1 ? 's' : ''} of leaf in the cup — pour through a Filter Mesh to keep them out.`);
-  if (!tips.length) tips.push('🏆 Perfection. Now make it more ridiculous — can a water wheel power the grinder?');
+  if (a.str > IDEAL.strHi) tips.push(`🥴 ${Math.round(a.str)}% strength: stewed! Fewer leaves, a shorter steep, or more water to dilute.`);
+  if (a.bits > 0) tips.push(`🍃 ${a.bits} bit${a.bits > 1 ? 's' : ''} of leaf in the cup; pour through a Filter Mesh to keep them out.`);
+  if (!tips.length) tips.push('🏆 Perfection. Now make it more ridiculous: can a water wheel power the grinder?');
   return tips;
 }

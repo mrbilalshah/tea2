@@ -1,5 +1,5 @@
 'use strict';
-/* ContrapTea — DOM UI: palette, inspector, wiring interactions, modals, save/share */
+/* ContrapTea, DOM UI: palette, inspector, wiring interactions, modals, save/share */
 
 const UI = {
   canvas: null, wrap: null,
@@ -163,6 +163,7 @@ function bindPointer() {
     const [wx, wy] = evtWorld(e);
     Game.mouse = [wx, wy];
     UI.hoverTerminal = (Game.mode === 'build' && !UI.drag) ? terminalAt(wx, wy) : null;
+    updateCursor(wx, wy);
     if (!UI.drag) return;
     if (UI.drag.kind === 'move') {
       const p = UI.drag.part;
@@ -173,6 +174,10 @@ function bindPointer() {
       UI.drag.x = wx; UI.drag.y = wy;
     }
   });
+
+  // an interrupted drag (pointer leaves the window, touch cancelled) must not stick
+  cv.addEventListener('pointercancel', () => { UI.drag = null; });
+  cv.addEventListener('pointerleave', () => { if (UI.drag && UI.drag.kind !== 'move') UI.drag = null; });
 
   cv.addEventListener('pointerup', (e) => {
     const [wx, wy] = evtWorld(e);
@@ -210,7 +215,30 @@ function bindPointer() {
     if (e.key === 'r' || e.key === 'R') { p.rot = ((p.rot || 0) + (e.shiftKey ? -15 : 15)) % 360; saveLocal(); }
     if (e.key === 'Delete' || e.key === 'Backspace') deletePart(p);
     if (e.key === 'd' || e.key === 'D') duplicatePart(p);
+    if (e.key.startsWith('Arrow')) {
+      e.preventDefault();
+      if (e.key === 'ArrowLeft') p.x -= 10;
+      if (e.key === 'ArrowRight') p.x += 10;
+      if (e.key === 'ArrowUp') p.y -= 10;
+      if (e.key === 'ArrowDown') p.y += 10;
+      saveLocal();
+    }
   });
+}
+
+/* cursor tells the player what a click will do */
+function updateCursor(wx, wy) {
+  let cur = 'default';
+  if (Game.mode === 'build') {
+    if (UI.drag) cur = UI.drag.kind === 'move' ? 'grabbing' : 'crosshair';
+    else if (Game.placing) cur = 'copy';
+    else if (UI.hoverTerminal) cur = 'crosshair';
+    else if (partAt(wx, wy)) cur = 'grab';
+  } else {
+    const p = partAt(wx, wy);
+    if (p && (p.type === 'switch' || p.type === 'gate' || p.type === 'tap')) cur = 'pointer';
+  }
+  UI.canvas.style.cursor = cur;
 }
 
 function selectedPart() {
@@ -309,7 +337,8 @@ function refreshCupGauge() {
     { nm: '💪 Strength', v: vs.conc * 100, max: 100, lo: IDEAL.strLo, hi: IDEAL.strHi, unit: '%', col: '#9c6a2f' },
     { nm: '💧 Volume', v: vs.vol, max: 300, lo: IDEAL.volFull, hi: 300, unit: 'ml', col: '#5a9ac9' },
   ];
-  el.innerHTML = '<h4>☕ The Cup — live</h4>' + rows.map(r => `
+  document.getElementById('btn-serve').classList.toggle('ready', vs.vol >= IDEAL.volFull);
+  el.innerHTML = '<h4>☕ The Cup, live</h4>' + rows.map(r => `
     <div class="gauge"><div class="g-label"><span>${r.nm}</span><span>${Math.round(r.v)}${r.unit}</span></div>
     <div class="g-bar">
       <div class="g-ideal" style="left:${r.lo / r.max * 100}%;width:${(r.hi - r.lo) / r.max * 100}%"></div>
@@ -349,7 +378,7 @@ function showWelcome() {
     <p>Use <b style="color:${DISC_COLORS.mech}">mechanical</b> parts to grind and move leaves,
        <b style="color:${DISC_COLORS.elec}">electrical</b> parts to heat, pump and sequence,
        and <b style="color:${DISC_COLORS.chem}">chemistry</b> to steep it just right.
-       There's no single answer — every machine is yours.</p>
+       There's no single answer: every machine is yours.</p>
     <p>The cup wants: <b>70–90 °C</b>, <b>40–70 % strength</b>, <b>at least 220 ml</b>, and <b>no leafy bits</b>.</p>
     <div class="modal-btns">
       <button class="go big" id="wl-ex">📦 Show me an example machine</button>
@@ -364,7 +393,7 @@ function showWelcome() {
 function showExamples() {
   showModal(`
     <h2>📦 Example machines</h2>
-    <p>Load one, run it, then rip it apart and make it yours. (This replaces your current build — Share it first if you want to keep it!)</p>
+    <p>Load one, run it, then rip it apart and make it yours. (This replaces your current build; Share it first if you want to keep it!)</p>
     <h3>${EXAMPLES.starter.name}</h3><p>${EXAMPLES.starter.blurb}</p>
     <div class="modal-btns"><button class="go" id="ex-starter">Load Starter Brewery</button></div>
     <h3>${EXAMPLES.grand.name}</h3><p>${EXAMPLES.grand.blurb}</p>
@@ -379,7 +408,7 @@ function showHelp(tab) {
   const tabs = { basics: '🧰 Basics', mech: '⚙️ Mechanical', elec: '🔌 Electrical', chem: '⚗️ Chemical' };
   const bodies = {
     basics: `
-      <p><b>Goal:</b> get 70–90 °C tea, 40–70 % strong, at least 220 ml, into <b>The Cup</b> — then hit <b>SERVE</b>.</p>
+      <p><b>Goal:</b> get 70–90 °C tea, 40–70 % strong, at least 220 ml, into <b>The Cup</b>, then hit <b>SERVE</b>.</p>
       <ul>
         <li>Click a palette part, then click the workshop to place it (<kbd>Shift</kbd>-click to place several).</li>
         <li>Drag parts to move. <kbd>R</kbd> rotates 15° (<kbd>Shift+R</kbd> back). <kbd>D</kbd> duplicates. <kbd>Del</kbd> deletes.</li>
@@ -389,26 +418,26 @@ function showHelp(tab) {
       </ul>`,
     mech: `
       <ul>
-        <li><b>Gears mesh</b> when their teeth touch. Speed changes by the radius ratio and direction flips — small gear on big gear = speed up!</li>
+        <li><b>Gears mesh</b> when their teeth touch. Speed changes by the radius ratio and direction flips: small gear on big gear = speed up!</li>
         <li>Put a gear <i>centred on</i> a motor / spring motor / water wheel axle to drive it.</li>
-        <li>The <b>grinder</b> and <b>Archimedes screw</b> have their own little pinion gears — mesh a gear against them to power them.</li>
+        <li>The <b>grinder</b> and <b>Archimedes screw</b> have their own little pinion gears, mesh a gear against them to power them.</li>
         <li>The <b>water wheel</b> spins when water pours on it: free power, no battery needed.</li>
         <li><b>Chutes and funnels</b> are free-form: rotate them to steer anything that falls.</li>
       </ul>`,
     elec: `
       <ul>
         <li>A load runs when it's wired to a battery's <b>+ and −</b>. Switches, timers and thermostats go <b>in series</b> to control it.</li>
-        <li><b>Voltage matters:</b> 24 V makes heaters hotter, motors and pumps faster — and drains the battery quicker. Watch its charge bar!</li>
-        <li>The <b>timer</b> conducts between its ON and OFF times — chain several to choreograph fill → boil → pour → steep → serve.</li>
+        <li><b>Voltage matters:</b> 24 V makes heaters hotter, motors and pumps faster, and drains the battery quicker. Watch its charge bar!</li>
+        <li>The <b>timer</b> conducts between its ON and OFF times; chain several to choreograph fill → boil → pour → steep → serve.</li>
         <li>The <b>thermostat</b> (placed in a vessel) is feedback control: it cuts the circuit at its setpoint. No more boiling over.</li>
         <li>Wire a <b>tap</b> or <b>gate</b> to control it electrically; unwired ones just stay open (tap) or use their toggle (gate).</li>
       </ul>`,
     chem: `
       <ul>
-        <li><b>Extraction:</b> tea steeps faster when the water is hotter — and <b>ground leaves brew ~4× faster</b> than whole ones (surface area!).</li>
+        <li><b>Extraction:</b> tea steeps faster when the water is hotter, and <b>ground leaves brew ~4× faster</b> than whole ones (surface area!).</li>
         <li><b>Concentration:</b> strength = extracted tea ÷ water volume. Too long or too little water = stewed; too short = dishwater.</li>
         <li><b>Thermal mass:</b> big volumes heat slowly and hold heat; everything cools toward room temperature, so serve while it's hot.</li>
-        <li><b>Separation:</b> the filter mesh lets liquid through and traps solids. Pour through it — no bits in the cup.</li>
+        <li><b>Separation:</b> the filter mesh lets liquid through and traps solids. Pour through it, no bits in the cup.</li>
         <li>Vessels <b>mix</b> whatever arrives: temperatures and strengths blend by volume. Dilution is a tool!</li>
       </ul>`,
   };
@@ -429,7 +458,8 @@ function showScore(sc) {
   showModal(`
     <h2 style="text-align:center">☕ The Verdict</h2>
     <div style="text-align:center">
-      <div class="stars">${'★'.repeat(sc.stars)}${'☆'.repeat(5 - sc.stars)}</div>
+      <div class="stars">${Array.from({ length: 5 }, (_, i) =>
+        `<span style="animation-delay:${i * 90}ms">${i < sc.stars ? '★' : '☆'}</span>`).join('')}</div>
       <div class="score-title">${sc.title}</div>
       <p>${Math.round(sc.vol)} ml at ${Math.round(sc.temp)} °C, ${Math.round(sc.str)} % strength${sc.bits ? `, ${sc.bits} leafy bit(s) 😬` : ''}</p>
     </div>
@@ -479,7 +509,7 @@ function importCode(code) {
 function showShare() {
   showModal(`
     <h2>🔗 Share your machine</h2>
-    <p>Copy this code and send it to a friend — they can paste it with <b>Import</b>.</p>
+    <p>Copy this code and send it to a friend; they can paste it with <b>Import</b>.</p>
     <textarea id="share-code" readonly>${exportCode()}</textarea>
     <div class="modal-btns">
       <button class="go" id="sh-copy">📋 Copy to clipboard</button>
@@ -506,7 +536,7 @@ function showImport() {
     </div>`);
   document.getElementById('im-go').onclick = () => {
     if (importCode(document.getElementById('import-code').value)) closeModal();
-    else document.getElementById('im-go').textContent = '❌ Invalid code — try again';
+    else document.getElementById('im-go').textContent = '❌ Invalid code, try again';
   };
   document.getElementById('im-close').onclick = closeModal;
 }

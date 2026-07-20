@@ -1,5 +1,5 @@
 'use strict';
-/* ContrapTea — game state, mode management, render loop */
+/* ContrapTea, game state, mode management, render loop */
 
 const Game = {
   state: { parts: [], wires: [], hoses: [] },
@@ -43,7 +43,7 @@ function serveNow() {
   const sc = scoreCup(Game.rt);
   stopRun();
   if (sc) { showScore(sc); return; }
-  showModal(`<h2>☕ No cup!</h2><p>Place <b>The Cup</b> from the palette — it's the whole point!</p>
+  showModal(`<h2>☕ No cup!</h2><p>Place <b>The Cup</b> from the palette, it's the whole point!</p>
     <div class="modal-btns"><button class="go" id="nc">OK</button></div>`);
   document.getElementById('nc').onclick = closeModal;
 }
@@ -53,7 +53,7 @@ function loadExample(key) {
   Game.selected = null; Game.placing = null;
   if (Game.mode === 'run') stopRun();
   refreshPalette(); refreshInspector(); saveLocal();
-  setTicker(`📦 Loaded "${EXAMPLES[key].name}" — press RUN to watch it, then make it yours!`);
+  setTicker(`📦 Loaded "${EXAMPLES[key].name}": press RUN to watch it, then make it yours!`);
 }
 function newMachine() {
   showModal(`<h2>🗑 Start fresh?</h2><p>This clears the whole workshop. Share your machine first if you want to keep it!</p>
@@ -85,10 +85,27 @@ function render() {
   for (let x = 0; x <= SIM.WORLD_W; x += 50) { g.moveTo(x, 0); g.lineTo(x, SIM.WORLD_H); }
   for (let y = 0; y <= SIM.WORLD_H; y += 50) { g.moveTo(0, y); g.lineTo(SIM.WORLD_W, y); }
   g.stroke();
+  // workbench along the bottom
+  g.fillStyle = '#241d16';
+  g.fillRect(0, SIM.WORLD_H - 46, SIM.WORLD_W, 46);
+  g.fillStyle = '#4a3a26';
+  g.fillRect(0, SIM.WORLD_H - 46, SIM.WORLD_W, 5);
   g.strokeStyle = 'rgba(255,240,210,.09)';
   g.strokeRect(0, 0, SIM.WORLD_W, SIM.WORLD_H);
 
   const rt = Game.rt;
+
+  // empty workshop invitation
+  if (Game.mode === 'build' && Game.state.parts.length === 0 && !Game.placing) {
+    g.textAlign = 'center';
+    g.fillStyle = 'rgba(243,233,216,.55)';
+    g.font = '600 34px "Avenir Next", "Segoe UI", sans-serif';
+    g.fillText('Your workshop is empty', SIM.WORLD_W / 2, SIM.WORLD_H / 2 - 30);
+    g.fillStyle = 'rgba(184,168,143,.75)';
+    g.font = '500 20px "Avenir Next", "Segoe UI", sans-serif';
+    g.fillText('Pick a part from the palette and click anywhere to place it.', SIM.WORLD_W / 2, SIM.WORLD_H / 2 + 12);
+    g.fillText('Or load an example machine from 📦 Examples and take it apart.', SIM.WORLD_W / 2, SIM.WORLD_H / 2 + 44);
+  }
 
   // hoses (under parts)
   for (const h of Game.state.hoses) {
@@ -137,6 +154,43 @@ function render() {
       g.strokeStyle = '#ffd24d'; g.lineWidth = 2; g.setLineDash([6, 5]);
       g.strokeRect(-def.w / 2 - 8, -def.h / 2 - 8, def.w + 16, def.h + 16);
       g.restore();
+    }
+  }
+
+  // build-mode engineering feedback: which gears mesh, which parts found their vessel
+  if (Game.mode === 'build') {
+    const net = computeGearNetwork(Game.state);
+    for (const l of net.links) {
+      if (l.lock) {
+        g.beginPath(); g.arc(l.ax, l.ay, 10, 0, U.TAU);
+        g.strokeStyle = 'rgba(232,147,58,.8)'; g.lineWidth = 2.5;
+        g.setLineDash([3, 4]); g.stroke(); g.setLineDash([]);
+      } else {
+        g.beginPath(); g.arc(l.cx, l.cy, 5, 0, U.TAU);
+        g.fillStyle = 'rgba(232,147,58,.9)'; g.fill();
+        g.beginPath(); g.arc(l.cx, l.cy, 9, 0, U.TAU);
+        g.strokeStyle = 'rgba(232,147,58,.45)'; g.lineWidth = 2; g.stroke();
+      }
+    }
+    for (const p of Game.state.parts) {
+      if (p.type !== 'heater' && p.type !== 'thermostat' && p.type !== 'pump') continue;
+      const bound = partBinding(Game.state, p);
+      const needsHose = p.type === 'pump' && !Game.state.hoses.some(h => h.pump === p.id);
+      const ok = bound && !needsHose;
+      const def = PARTS[p.type];
+      const [bx, by] = U.toWorld(p, def.w / 2 - 2, -def.h / 2 + 2);
+      g.beginPath(); g.arc(bx, by, 8, 0, U.TAU);
+      g.fillStyle = ok ? 'rgba(82,189,154,.95)' : 'rgba(224,112,64,.95)';
+      g.fill();
+      g.fillStyle = '#1e1a16';
+      g.font = 'bold 11px sans-serif'; g.textAlign = 'center';
+      g.fillText(ok ? '✓' : '!', bx, by + 4);
+      if (!ok && Game.selected === p.id) {
+        g.fillStyle = 'rgba(224,112,64,.95)';
+        g.font = 'bold 12px "Avenir Next", "Segoe UI", sans-serif';
+        g.fillText(needsHose && bound ? 'needs a hose (drag from its outlet)' : 'place it in / beside a vessel',
+          p.x, by - 14);
+      }
     }
   }
 
