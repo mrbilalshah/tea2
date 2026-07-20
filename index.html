@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>ContrapTea 🫖: build your own tea machine</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🫖</text></svg>">
 <link rel="stylesheet" href="css/style.css">
@@ -18,11 +18,11 @@
       <button class="speed sel" data-s="1">1×</button><button class="speed" data-s="2">2×</button><button class="speed" data-s="4">4×</button>
     </div>
     <div class="spacer"></div>
-    <button id="btn-examples">📦 Examples</button>
-    <button id="btn-new">🗑 New</button>
-    <button id="btn-share">🔗 Share</button>
-    <button id="btn-import">📥 Import</button>
-    <button id="btn-help">📖 Handbook</button>
+    <button id="btn-examples" title="Examples" aria-label="Examples"><span class="ico">📦</span><span class="lbl"> Examples</span></button>
+    <button id="btn-new" title="New machine" aria-label="New machine"><span class="ico">🗑</span><span class="lbl"> New</span></button>
+    <button id="btn-share" title="Share" aria-label="Share"><span class="ico">🔗</span><span class="lbl"> Share</span></button>
+    <button id="btn-import" title="Import" aria-label="Import"><span class="ico">📥</span><span class="lbl"> Import</span></button>
+    <button id="btn-help" title="Handbook" aria-label="Handbook"><span class="ico">📖</span><span class="lbl"> Handbook</span></button>
   </header>
 
   <main>
@@ -31,6 +31,11 @@
       <canvas id="game"></canvas>
       <div id="inspector" class="hidden"></div>
       <div id="cup-gauge" class="hidden"></div>
+      <div id="zoom-ctl">
+        <button id="z-in" aria-label="Zoom in">+</button>
+        <button id="z-out" aria-label="Zoom out">−</button>
+        <button id="z-fit" aria-label="Fit whole workshop">⤢</button>
+      </div>
       <div id="ticker"></div>
     </div>
   </main>
