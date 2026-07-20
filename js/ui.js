@@ -3,26 +3,55 @@
 
 const UI = {
   canvas: null, wrap: null,
-  view: { s: 1, ox: 0, oy: 0 },
-  drag: null,          // {kind:'move'|'wire'|'hose', ...}
+  view: { fit: 1, cw: 1, ch: 1, dpr: 1 },
+  cam: { z: 1, cx: SIM.WORLD_W / 2, cy: SIM.WORLD_H / 2 },   // pan/zoom camera
+  pointers: new Map(),   // active pointerId -> {sx, sy} (css px) for pinch tracking
+  pinch: null,
+  drag: null,            // {kind:'move'|'wire'|'hose'|'pan', ...}
   hoverTerminal: null,
   tickerUntil: 0,
 };
 
-/* ---------------- coordinate mapping ---------------- */
+/* ---------------- coordinate mapping & camera ---------------- */
 function fitView() {
   const r = UI.wrap.getBoundingClientRect();
   const dpr = window.devicePixelRatio || 1;
   UI.canvas.width = r.width * dpr;
   UI.canvas.height = r.height * dpr;
-  const s = Math.min(r.width / SIM.WORLD_W, r.height / SIM.WORLD_H);
-  UI.view = { s, ox: (r.width - SIM.WORLD_W * s) / 2, oy: (r.height - SIM.WORLD_H * s) / 2, dpr };
+  UI.view = { fit: Math.min(r.width / SIM.WORLD_W, r.height / SIM.WORLD_H), cw: r.width, ch: r.height, dpr };
+  clampCam();
+}
+function viewScale() { return UI.view.fit * UI.cam.z; }
+function clampCam() {
+  const S = viewScale();
+  const visW = UI.view.cw / S, visH = UI.view.ch / S;
+  UI.cam.cx = visW >= SIM.WORLD_W ? SIM.WORLD_W / 2 : U.clamp(UI.cam.cx, visW / 2, SIM.WORLD_W - visW / 2);
+  UI.cam.cy = visH >= SIM.WORLD_H ? SIM.WORLD_H / 2 : U.clamp(UI.cam.cy, visH / 2, SIM.WORLD_H - visH / 2);
+}
+function evtScreen(e) {
+  const r = UI.canvas.getBoundingClientRect();
+  return [e.clientX - r.left, e.clientY - r.top];
+}
+function screenToWorld(sx, sy) {
+  const S = viewScale();
+  return [(sx - UI.view.cw / 2) / S + UI.cam.cx, (sy - UI.view.ch / 2) / S + UI.cam.cy];
 }
 function evtWorld(e) {
-  const r = UI.canvas.getBoundingClientRect();
-  const x = (e.clientX - r.left - UI.view.ox) / UI.view.s;
-  const y = (e.clientY - r.top - UI.view.oy) / UI.view.s;
-  return [x, y];
+  const [sx, sy] = evtScreen(e);
+  return screenToWorld(sx, sy);
+}
+function zoomAt(sx, sy, factor) {
+  const [wx, wy] = screenToWorld(sx, sy);
+  UI.cam.z = U.clamp(UI.cam.z * factor, 1, 4);
+  const S = viewScale();
+  UI.cam.cx = wx - (sx - UI.view.cw / 2) / S;
+  UI.cam.cy = wy - (sy - UI.view.ch / 2) / S;
+  clampCam();
+}
+function resetZoom() {
+  UI.cam.z = 1;
+  UI.cam.cx = SIM.WORLD_W / 2; UI.cam.cy = SIM.WORLD_H / 2;
+  clampCam();
 }
 
 /* ---------------- palette ---------------- */
@@ -37,7 +66,7 @@ function buildPalette() {
     for (const type of PALETTE_ORDER[disc]) {
       const def = PARTS[type];
       const b = document.createElement('button');
-      b.className = 'pal-item';
+      b.className = 'pal-item ' + disc;
       b.dataset.type = type;
       b.innerHTML = `<span class="ico">${def.ico}</span><span>${def.name}</span>`;
       b.title = def.desc;
@@ -61,30 +90,30 @@ function refreshPalette() {
   });
 }
 
-/* ---------------- hit testing ---------------- */
-function partAt(wx, wy) {
+/* ---------------- hit testing (bigger slop for touch) ---------------- */
+function partAt(wx, wy, slop = 6) {
   const parts = Game.state.parts;
   for (let i = parts.length - 1; i >= 0; i--) {
     const p = parts[i];
     const def = PARTS[p.type];
     const [lx, ly] = U.toLocal(p, wx, wy);
-    if (Math.abs(lx) <= def.w / 2 + 6 && Math.abs(ly) <= def.h / 2 + 6) return p;
+    if (Math.abs(lx) <= def.w / 2 + slop && Math.abs(ly) <= def.h / 2 + slop) return p;
   }
   return null;
 }
-function terminalAt(wx, wy) {
+function terminalAt(wx, wy, r = 13) {
   for (const p of Game.state.parts) {
     for (const t of worldTerminals(p)) {
-      if (U.dist(wx, wy, t.x, t.y) < 13) return t;
+      if (U.dist(wx, wy, t.x, t.y) < r) return t;
     }
     if (p.type === 'pump') {
       const [ox, oy] = U.toWorld(p, PARTS.pump.outlet.x, PARTS.pump.outlet.y);
-      if (U.dist(wx, wy, ox, oy) < 13) return { x: ox, y: oy, idx: -1, part: p, outlet: true };
+      if (U.dist(wx, wy, ox, oy) < r) return { x: ox, y: oy, idx: -1, part: p, outlet: true };
     }
   }
   return null;
 }
-function wireAt(wx, wy) {
+function wireAt(wx, wy, tol = 9) {
   const termPos = (ref) => {
     const p = Game.state.parts.find(q => q.id === ref[0]);
     if (!p) return null;
@@ -95,7 +124,7 @@ function wireAt(wx, wy) {
     const a = termPos(w.a), b = termPos(w.b);
     if (!a || !b) continue;
     const mx = (a[0] + b[0]) / 2, my = Math.max(a[1], b[1]) + 30;
-    if (U.segDist(wx, wy, a[0], a[1], mx, my) < 9 || U.segDist(wx, wy, mx, my, b[0], b[1]) < 9) return w;
+    if (U.segDist(wx, wy, a[0], a[1], mx, my) < tol || U.segDist(wx, wy, mx, my, b[0], b[1]) < tol) return w;
   }
   return null;
 }
@@ -105,11 +134,22 @@ function bindPointer() {
   const cv = UI.canvas;
 
   cv.addEventListener('pointerdown', (e) => {
-    const [wx, wy] = evtWorld(e);
+    cv.setPointerCapture(e.pointerId);
+    const [sx, sy] = evtScreen(e);
+    UI.pointers.set(e.pointerId, { sx, sy });
+    if (UI.pointers.size === 2) { startPinch(); return; }
+    if (UI.pinch) return;
+
+    const [wx, wy] = screenToWorld(sx, sy);
+    const touch = e.pointerType === 'touch';
+    const slop = touch ? 14 : 6;
+    const startPan = () => {
+      UI.drag = { kind: 'pan', sx0: sx, sy0: sy, cx0: UI.cam.cx, cy0: UI.cam.cy, moved: false };
+    };
 
     if (Game.mode === 'run') {
-      // interactive overrides while running
-      const p = partAt(wx, wy);
+      // interactive overrides while running; anywhere else drags the camera
+      const p = partAt(wx, wy, slop);
       if (p && p.type === 'switch') {
         Game.rt.switchState[p.id] = !Game.rt.switchState[p.id];
         setTicker(`🎚 Switch flipped ${Game.rt.switchState[p.id] ? 'ON' : 'OFF'}`);
@@ -119,6 +159,8 @@ function bindPointer() {
       } else if (p && p.type === 'tap') {
         Game.rt.tapManual[p.id] = !Game.rt.tapOn[p.id];
         setTicker('🚰 Tap override!');
+      } else {
+        startPan();
       }
       return;
     }
@@ -134,7 +176,7 @@ function bindPointer() {
     }
 
     // start a wire / hose from a terminal
-    const t = terminalAt(wx, wy);
+    const t = terminalAt(wx, wy, touch ? 22 : 13);
     if (t) {
       UI.drag = t.outlet
         ? { kind: 'hose', from: t, x: wx, y: wy }
@@ -143,7 +185,7 @@ function bindPointer() {
     }
 
     // grab a part
-    const p = partAt(wx, wy);
+    const p = partAt(wx, wy, slop);
     if (p) {
       Game.selected = p.id;
       UI.drag = { kind: 'move', part: p, dx: p.x - wx, dy: p.y - wy, moved: false };
@@ -152,20 +194,30 @@ function bindPointer() {
     }
 
     // select a wire?
-    const w = wireAt(wx, wy);
+    const w = wireAt(wx, wy, touch ? 16 : 9);
     if (w) { Game.selected = 'wire:' + w.id; refreshInspector(); return; }
 
-    Game.selected = null;
-    refreshInspector();
+    // empty space: drag pans the camera; a motionless tap deselects on release
+    startPan();
   });
 
   cv.addEventListener('pointermove', (e) => {
-    const [wx, wy] = evtWorld(e);
+    const [sx, sy] = evtScreen(e);
+    if (UI.pointers.has(e.pointerId)) UI.pointers.set(e.pointerId, { sx, sy });
+    if (UI.pinch) { updatePinch(); return; }
+
+    const [wx, wy] = screenToWorld(sx, sy);
     Game.mouse = [wx, wy];
-    UI.hoverTerminal = (Game.mode === 'build' && !UI.drag) ? terminalAt(wx, wy) : null;
+    UI.hoverTerminal = (Game.mode === 'build' && !UI.drag && e.pointerType !== 'touch') ? terminalAt(wx, wy) : null;
     updateCursor(wx, wy);
     if (!UI.drag) return;
-    if (UI.drag.kind === 'move') {
+    if (UI.drag.kind === 'pan') {
+      if (Math.hypot(sx - UI.drag.sx0, sy - UI.drag.sy0) > 5) UI.drag.moved = true;
+      const S = viewScale();
+      UI.cam.cx = UI.drag.cx0 - (sx - UI.drag.sx0) / S;
+      UI.cam.cy = UI.drag.cy0 - (sy - UI.drag.sy0) / S;
+      clampCam();
+    } else if (UI.drag.kind === 'move') {
       const p = UI.drag.part;
       p.x = Math.round((wx + UI.drag.dx) / 10) * 10;
       p.y = Math.round((wy + UI.drag.dy) / 10) * 10;
@@ -175,15 +227,17 @@ function bindPointer() {
     }
   });
 
-  // an interrupted drag (pointer leaves the window, touch cancelled) must not stick
-  cv.addEventListener('pointercancel', () => { UI.drag = null; });
-  cv.addEventListener('pointerleave', () => { if (UI.drag && UI.drag.kind !== 'move') UI.drag = null; });
-
   cv.addEventListener('pointerup', (e) => {
+    UI.pointers.delete(e.pointerId);
+    if (UI.pinch) {
+      if (UI.pointers.size < 2) UI.pinch = null;
+      return;
+    }
     const [wx, wy] = evtWorld(e);
+    const touch = e.pointerType === 'touch';
     if (!UI.drag) return;
     if (UI.drag.kind === 'wire') {
-      const t = terminalAt(wx, wy);
+      const t = terminalAt(wx, wy, touch ? 22 : 13);
       if (t && !t.outlet && !(t.part.id === UI.drag.from.part.id && t.idx === UI.drag.from.idx)) {
         Game.state.wires.push({ id: U.uid(), a: [UI.drag.from.part.id, UI.drag.from.idx], b: [t.part.id, t.idx] });
         saveLocal();
@@ -197,9 +251,25 @@ function bindPointer() {
       saveLocal();
     } else if (UI.drag.kind === 'move' && UI.drag.moved) {
       saveLocal();
+    } else if (UI.drag.kind === 'pan' && !UI.drag.moved && Game.mode === 'build') {
+      Game.selected = null;
+      refreshInspector();
     }
     UI.drag = null;
   });
+
+  // an interrupted gesture (call, notification, window switch) must not stick
+  cv.addEventListener('pointercancel', (e) => {
+    UI.pointers.delete(e.pointerId);
+    UI.pinch = null; UI.drag = null;
+  });
+
+  // scroll wheel zooms toward the cursor
+  cv.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const [sx, sy] = evtScreen(e);
+    zoomAt(sx, sy, e.deltaY < 0 ? 1.15 : 1 / 1.15);
+  }, { passive: false });
 
   window.addEventListener('keydown', (e) => {
     if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
@@ -229,7 +299,8 @@ function bindPointer() {
 /* cursor tells the player what a click will do */
 function updateCursor(wx, wy) {
   let cur = 'default';
-  if (Game.mode === 'build') {
+  if (UI.drag && UI.drag.kind === 'pan') cur = 'grabbing';
+  else if (Game.mode === 'build') {
     if (UI.drag) cur = UI.drag.kind === 'move' ? 'grabbing' : 'crosshair';
     else if (Game.placing) cur = 'copy';
     else if (UI.hoverTerminal) cur = 'crosshair';
@@ -239,6 +310,24 @@ function updateCursor(wx, wy) {
     if (p && (p.type === 'switch' || p.type === 'gate' || p.type === 'tap')) cur = 'pointer';
   }
   UI.canvas.style.cursor = cur;
+}
+
+/* two-finger pinch: zoom about the fingers' midpoint */
+function startPinch() {
+  UI.drag = null;
+  const [a, b] = [...UI.pointers.values()];
+  const mx = (a.sx + b.sx) / 2, my = (a.sy + b.sy) / 2;
+  UI.pinch = { d0: Math.hypot(a.sx - b.sx, a.sy - b.sy) || 1, z0: UI.cam.z, w0: screenToWorld(mx, my) };
+}
+function updatePinch() {
+  const [a, b] = [...UI.pointers.values()];
+  const d = Math.hypot(a.sx - b.sx, a.sy - b.sy) || 1;
+  const mx = (a.sx + b.sx) / 2, my = (a.sy + b.sy) / 2;
+  UI.cam.z = U.clamp(UI.pinch.z0 * (d / UI.pinch.d0), 1, 4);
+  const S = viewScale();
+  UI.cam.cx = UI.pinch.w0[0] - (mx - UI.view.cw / 2) / S;
+  UI.cam.cy = UI.pinch.w0[1] - (my - UI.view.ch / 2) / S;
+  clampCam();
 }
 
 function selectedPart() {
@@ -413,6 +502,7 @@ function showHelp(tab) {
         <li>Click a palette part, then click the workshop to place it (<kbd>Shift</kbd>-click to place several).</li>
         <li>Drag parts to move. <kbd>R</kbd> rotates 15° (<kbd>Shift+R</kbd> back). <kbd>D</kbd> duplicates. <kbd>Del</kbd> deletes.</li>
         <li>Drag between the little <b>terminal dots</b> to run wires. Drag from a pump's top outlet to aim its <b>hose</b>.</li>
+        <li><b>Getting around:</b> drag empty space to pan, pinch or scroll to zoom (or use the +/− buttons). On a phone, zoom in before wiring: fingers need room!</li>
         <li>Hit <b>▶ RUN</b> to watch your machine work from t = 0. You can flip switches, taps and gates by clicking them mid-run!</li>
         <li>Your build auto-saves in this browser. Use <b>Share</b> to export it as a code for friends.</li>
       </ul>`,

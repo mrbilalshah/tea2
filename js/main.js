@@ -70,11 +70,13 @@ function newMachine() {
 /* ---------------- rendering ---------------- */
 function render() {
   const g = UI.canvas.getContext('2d');
-  const { s, ox, oy, dpr } = UI.view;
+  const { cw, ch, dpr } = UI.view;
+  const S = viewScale();
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
-  g.clearRect(0, 0, UI.canvas.width / dpr, UI.canvas.height / dpr);
-  g.translate(ox, oy);
-  g.scale(s, s);
+  g.clearRect(0, 0, cw, ch);
+  g.translate(cw / 2, ch / 2);
+  g.scale(S, S);
+  g.translate(-UI.cam.cx, -UI.cam.cy);
 
   // workshop background
   g.fillStyle = '#2e2823';
@@ -301,6 +303,9 @@ function boot() {
       document.querySelectorAll('button.speed').forEach(q => q.classList.toggle('sel', q === b));
     });
   });
+  document.getElementById('z-in').addEventListener('click', () => zoomAt(UI.view.cw / 2, UI.view.ch / 2, 1.4));
+  document.getElementById('z-out').addEventListener('click', () => zoomAt(UI.view.cw / 2, UI.view.ch / 2, 1 / 1.4));
+  document.getElementById('z-fit').addEventListener('click', resetZoom);
   document.getElementById('btn-examples').addEventListener('click', showExamples);
   document.getElementById('btn-new').addEventListener('click', newMachine);
   document.getElementById('btn-share').addEventListener('click', showShare);

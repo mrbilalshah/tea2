@@ -31,6 +31,10 @@ No build step, no dependencies — it's a static web page:
    **volume (≥ 220 ml)** and leafy bits (use a filter!), and you earn a badge for every
    engineering discipline your machine genuinely used.
 
+**On a phone**: the palette becomes a strip along the bottom; drag empty space to pan,
+pinch (or use the +/− buttons) to zoom, tap to select and place. On desktop the scroll
+wheel zooms too.
+
 Your build auto-saves in the browser. **Share** exports it as a code your friends can
 **Import**. Two example machines (📦 Examples) show the range: the electrically
 sequenced *Starter Brewery* and the all-three-disciplines *Grand Tea Engine*.
