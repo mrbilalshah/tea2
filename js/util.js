@@ -1,5 +1,5 @@
 'use strict';
-/* ContrapTea — small math & misc helpers (global namespace U) */
+/* ContrapTea, small math & misc helpers (global namespace U) */
 
 const U = {
   TAU: Math.PI * 2,

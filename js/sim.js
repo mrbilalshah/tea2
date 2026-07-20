@@ -1,5 +1,5 @@
 'use strict';
-/* ContrapTea — runtime simulation.
+/* ContrapTea, runtime simulation.
    Build state (parts/wires/hoses) is immutable during a run; the runtime `rt`
    holds everything dynamic: particles, fluids, circuits, shaft speeds. */
 
@@ -68,32 +68,45 @@ function newRuntime(state) {
   }
 
   // bind heaters / thermostats / pump inlets to the vessel containing them
-  const containers = state.parts.filter(p => PARTS[p.type].getContainer);
-  const findVessel = (wx, wy, slack) => {
-    for (const c of containers) {
-      const box = PARTS[c.type].getContainer(c);
-      const [lx, ly] = U.toLocal(c, wx, wy);
-      if (lx > box.x1 - slack && lx < box.x2 + slack && ly > box.y1 - slack && ly < box.y2 + slack) return c.id;
-    }
-    return null;
-  };
   for (const p of state.parts) {
-    if (p.type === 'heater') rt.bindings.heaters[p.id] = findVessel(p.x, p.y, 12);
-    if (p.type === 'thermostat') rt.bindings.thermos[p.id] = findVessel(p.x, p.y + 20, 25);
+    if (p.type === 'heater') rt.bindings.heaters[p.id] = partBinding(state, p);
+    if (p.type === 'thermostat') rt.bindings.thermos[p.id] = partBinding(state, p);
     if (p.type === 'pump') {
-      const [ix, iy] = U.toWorld(p, PARTS.pump.inlet.x, PARTS.pump.inlet.y);
-      rt.bindings.pumps[p.id] = findVessel(ix, iy, 32);
+      rt.bindings.pumps[p.id] = partBinding(state, p);
       rt.pumpAcc[p.id] = 0;
     }
   }
 
   // mechanical adjacency: gear<->gear mesh, gear<->shaftOut lock, gear<->pinion mesh
-  buildGearNetwork(state, rt);
+  const net = computeGearNetwork(state);
+  rt.gearNodes = net.nodes;
+  rt.gearLinks = net.links;
 
   return rt;
 }
 
-function buildGearNetwork(state, rt) {
+/* Which vessel does a heater / thermostat / pump act on? (null if none) */
+function findVesselAt(state, wx, wy, slack) {
+  for (const c of state.parts) {
+    const def = PARTS[c.type];
+    if (!def.getContainer) continue;
+    const box = def.getContainer(c);
+    const [lx, ly] = U.toLocal(c, wx, wy);
+    if (lx > box.x1 - slack && lx < box.x2 + slack && ly > box.y1 - slack && ly < box.y2 + slack) return c.id;
+  }
+  return null;
+}
+function partBinding(state, p) {
+  if (p.type === 'heater') return findVesselAt(state, p.x, p.y, 12);
+  if (p.type === 'thermostat') return findVesselAt(state, p.x, p.y + 20, 25);
+  if (p.type === 'pump') {
+    const [ix, iy] = U.toWorld(p, PARTS.pump.inlet.x, PARTS.pump.inlet.y);
+    return findVesselAt(state, ix, iy, 32);
+  }
+  return null;
+}
+
+function computeGearNetwork(state) {
   const gears = state.parts.filter(p => p.type === 'gear');
   const nodes = [];  // {key, x, y, r, kind:'gear'|'driver'|'pin', part}
   for (const g of gears) nodes.push({ key: g.id, x: g.x, y: g.y, r: gearRadius(g), kind: 'gear', part: g });
@@ -114,16 +127,23 @@ function buildGearNetwork(state, rt) {
       const a = nodes[i], b = nodes[j];
       const d = U.dist(a.x, a.y, b.x, b.y);
       if (a.kind === 'driver' && b.kind === 'gear' || a.kind === 'gear' && b.kind === 'driver') {
-        if (d <= LOCK_TOL) links.push({ a: a.key, b: b.key, ratio: 1 });     // same axle
+        if (d <= LOCK_TOL) {
+          links.push({ a: a.key, b: b.key, ratio: 1, lock: true, ax: a.x, ay: a.y, bx: b.x, by: b.y });
+        }
       } else if (a.kind !== 'driver' && b.kind !== 'driver') {
         if (Math.abs(d - (a.r + b.r)) <= MESH_TOL) {
-          links.push({ a: a.key, b: b.key, ratio: -(a.r / b.r), inv: -(b.r / a.r) });
+          // contact point sits between the two pitch circles
+          const t = a.r / (a.r + b.r);
+          links.push({
+            a: a.key, b: b.key, ratio: -(a.r / b.r), inv: -(b.r / a.r),
+            ax: a.x, ay: a.y, bx: b.x, by: b.y,
+            cx: U.lerp(a.x, b.x, t), cy: U.lerp(a.y, b.y, t),
+          });
         }
       }
     }
   }
-  rt.gearLinks = links;
-  rt.gearNodes = nodes;
+  return { nodes, links };
 }
 
 /* -------- per-frame mechanical speed propagation -------- */
@@ -160,10 +180,7 @@ function solveMechanical(state, rt, dt) {
   for (const n of rt.gearNodes) {
     const s = speeds[n.key] || 0;
     rt.rpm[n.key] = s;
-    const animKey = n.kind === 'gear' ? n.part.id : n.part.id;
-    if (n.kind !== 'driver' || true) {
-      rt.ang[animKey] = (rt.ang[animKey] || 0) + (s * U.TAU / 60) * dt;
-    }
+    rt.ang[n.part.id] = (rt.ang[n.part.id] || 0) + (s * U.TAU / 60) * dt;
     if (n.kind === 'gear' && Math.abs(s) > 1) rt.flags.geared = true;
   }
   // pump impeller animation
@@ -506,13 +523,13 @@ function simStep(state, rt, dt) {
           vs.conc += dEx / (vs.vol / 250);
           if (!rt.flags.steeped && vs.conc > 0.02) {
             rt.flags.steeped = true;
-            simEvent(rt, '🍃 Tea is steeping — extraction has begun!');
+            simEvent(rt, '🍃 Tea is steeping, extraction has begun!');
           }
         }
       }
     }
 
-    // overflow — spill drops appear beyond the walls so they can't fall back in
+    // overflow, spill drops appear beyond the walls so they can't fall back in
     if (vs.vol > box.cap) {
       vs.vol -= SIM.DROP_ML;
       const left = Math.random() < 0.5;

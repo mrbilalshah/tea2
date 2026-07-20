@@ -1,5 +1,5 @@
 'use strict';
-/* ContrapTea — part registry.
+/* ContrapTea, part registry.
    Each part definition:
      name, disc ('mech'|'elec'|'chem'), ico, w, h, desc
      props: [{key,label,type:'range'|'select'|'toggle',min,max,step,def,unit,options}]
@@ -116,7 +116,7 @@ function drawSteam(g, part, rt, x, y) {
 
 PARTS.gear = {
   name: 'Gear', disc: 'mech', ico: '⚙️', w: 80, h: 80,
-  desc: 'Meshes with neighbouring gears and pinions when their teeth touch. Speed changes by the ratio of radii — and direction flips!',
+  desc: 'Meshes with neighbouring gears and pinions when their teeth touch. Speed changes by the ratio of radii, and direction flips!',
   props: [{ key: 'size', label: 'Size', type: 'select', def: 'medium', options: [
     { v: 'small', label: 'Small (fast)' }, { v: 'medium', label: 'Medium' }, { v: 'large', label: 'Large (slow, strong)' }] }],
   segs: () => [],
@@ -183,7 +183,7 @@ PARTS.spring_motor = {
 
 PARTS.waterwheel = {
   name: 'Water Wheel', disc: 'mech', ico: '🎡', w: 120, h: 120,
-  desc: 'Falling water spins it — free mechanical power! Aim a stream at the paddles, and put a gear on its axle to use the rotation.',
+  desc: 'Falling water spins it: free mechanical power! Aim a stream at the paddles, and put a gear on its axle to use the rotation.',
   props: [],
   shaftOut: { x: 0, y: 0 },
   wheelR: 55,
@@ -211,7 +211,7 @@ PARTS.waterwheel = {
 
 PARTS.grinder = {
   name: 'Leaf Grinder', disc: 'mech', ico: '🌪', w: 104, h: 116,
-  desc: 'A burr mill: drop whole tea leaves in the top. When its pinion (side dot) spins fast enough (≥30 rpm), it grinds them into fine grounds — which brew much faster!',
+  desc: 'A burr mill: drop whole tea leaves in the top. When its pinion (side dot) spins fast enough (≥30 rpm), it grinds them into fine grounds, which brew much faster!',
   props: [],
   shaftIn: { x: 58, y: 0, r: PIN_R },
   segs(p, rt) {
@@ -351,7 +351,7 @@ PARTS.funnel = {
 
 PARTS.battery = {
   name: 'Battery', disc: 'elec', ico: '🔋', w: 80, h: 58,
-  desc: 'The power source. Loads run when wired between + and −. Higher voltage = hotter heaters, faster motors and pumps — but drains the charge faster.',
+  desc: 'The power source. Loads run when wired between + and −. Higher voltage = hotter heaters, faster motors and pumps, but drains the charge faster.',
   props: [
     { key: 'voltage', label: 'Voltage', type: 'select', def: '12', options: [
       { v: '6', label: '6 V (gentle)' }, { v: '12', label: '12 V' }, { v: '24', label: '24 V (fierce)' }] },
@@ -376,7 +376,7 @@ PARTS.battery = {
 
 PARTS.switch = {
   name: 'Switch', disc: 'elec', ico: '🎚', w: 56, h: 36,
-  desc: 'A simple on/off switch, wired in series. You can flip it by clicking it while the machine runs — manual control!',
+  desc: 'A simple on/off switch, wired in series. You can flip it by clicking it while the machine runs, manual control!',
   props: [{ key: 'on', label: 'Starts ON', type: 'toggle', def: true }],
   terminals: [{ x: -24, y: 0, label: 'a' }, { x: 24, y: 0, label: 'b' }],
   conduct: true,
@@ -396,7 +396,7 @@ PARTS.switch = {
 
 PARTS.timer = {
   name: 'Timer', disc: 'elec', ico: '⏱', w: 64, h: 48,
-  desc: 'Automation! Conducts only between its ON and OFF times — perfect for sequencing: fill, then boil, then pour, then steep…',
+  desc: 'Automation! Conducts only between its ON and OFF times: perfect for sequencing: fill, then boil, then pour, then steep…',
   props: [
     { key: 'ton', label: 'ON at', type: 'range', min: 0, max: 290, step: 5, def: 0, unit: 's' },
     { key: 'toff', label: 'OFF at', type: 'range', min: 5, max: 300, step: 5, def: 45, unit: 's' },
@@ -423,7 +423,7 @@ PARTS.timer = {
 
 PARTS.thermostat = {
   name: 'Thermostat', disc: 'elec', ico: '🌡', w: 60, h: 42,
-  desc: 'Feedback control: place it inside a vessel. It conducts while the water is below its setpoint, then clicks off — so your kettle stops at just the right temperature.',
+  desc: 'Feedback control: place it inside a vessel. It conducts while the water is below its setpoint, then clicks off, so your kettle stops at just the right temperature.',
   props: [{ key: 'setpoint', label: 'Setpoint', type: 'range', min: 40, max: 100, step: 1, def: 92, unit: '°C' }],
   terminals: [{ x: -26, y: -14, label: 'a' }, { x: 26, y: -14, label: 'b' }],
   conduct: true,
@@ -446,7 +446,7 @@ PARTS.thermostat = {
 
 PARTS.heater = {
   name: 'Heating Element', disc: 'elec', ico: '♨️', w: 66, h: 26,
-  desc: 'An immersion heater: place it inside a vessel and power it. Joule heating — more watts and volts boil faster, but small volumes heat quickest.',
+  desc: 'An immersion heater: place it inside a vessel and power it. Joule heating: more watts and volts boil faster, but small volumes heat quickest.',
   props: [{ key: 'watts', label: 'Power', type: 'range', min: 300, max: 3000, step: 100, def: 1200, unit: 'W' }],
   terminals: [{ x: -22, y: -12, label: 'a' }, { x: 22, y: -12, label: 'b' }],
   segs: () => [],
@@ -526,7 +526,7 @@ PARTS.gate = {
 
 PARTS.tap = {
   name: 'Water Tap', disc: 'chem', ico: '🚰', w: 74, h: 60,
-  desc: 'Pours cold water (20 °C). Unwired it runs the whole time; wire it up (solenoid valve) to switch it electrically — through a timer, say.',
+  desc: 'Pours cold water (20 °C). Unwired it runs the whole time; wire it up (solenoid valve) to switch it electrically, through a timer, say.',
   props: [{ key: 'flow', label: 'Flow', type: 'range', min: 10, max: 60, step: 2, def: 26, unit: 'ml/s' }],
   terminals: [{ x: -20, y: -26, label: 'a' }, { x: 20, y: -26, label: 'b' }],
   spout: { x: 0, y: 30 },
@@ -556,7 +556,7 @@ PARTS.tap = {
 
 PARTS.caddy = {
   name: 'Tea Caddy', disc: 'chem', ico: '🍃', w: 84, h: 74,
-  desc: 'Holds whole tea leaves and drips them out of the bottom while the machine runs. Grind them for a faster, stronger brew — or steep them whole for subtlety.',
+  desc: 'Holds whole tea leaves and drips them out of the bottom while the machine runs. Grind them for a faster, stronger brew, or steep them whole for subtlety.',
   props: [
     { key: 'count', label: 'Leaves', type: 'range', min: 2, max: 20, step: 1, def: 8, unit: '' },
     { key: 'rate', label: 'Drop every', type: 'range', min: 0.5, max: 4, step: 0.25, def: 1.25, unit: 's' },
@@ -608,7 +608,7 @@ PARTS.vessel = {
 
 PARTS.filter = {
   name: 'Filter Mesh', disc: 'chem', ico: '🕸', w: 100, h: 14,
-  desc: 'Separation! Liquid drips straight through; leaves and grounds are caught on top. Put one over your cup — nobody likes bits in their tea.',
+  desc: 'Separation! Liquid drips straight through; leaves and grounds are caught on top. Put one over your cup: nobody likes bits in their tea.',
   props: [],
   segs: () => [{ x1: -45, y1: 0, x2: 45, y2: 0, filter: true }],
   draw(g) {
